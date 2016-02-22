@@ -3,6 +3,9 @@
 
 #include <round.h>
 #include <stdint.h>
+// ---------- added includes -------------
+#include <list.h>
+// ---------------------------------------
 
 /* Number of timer interrupts per second. */
 #define TIMER_FREQ 100
@@ -25,5 +28,11 @@ void timer_udelay (int64_t microseconds);
 void timer_ndelay (int64_t nanoseconds);
 
 void timer_print_stats (void);
+
+// ------- added declarations --------------------
+bool timer_less (const struct list_elem *a, const struct list_elem *b, void *aux);
+void insert_sleeper(struct list_elem* list_element);
+void timer_tick();
+
 
 #endif /* devices/timer.h */
