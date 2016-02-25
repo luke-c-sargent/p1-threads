@@ -345,11 +345,23 @@ thread_foreach (thread_action_func *func, void *aux)
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void
+void 
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  // 
+  struct thread* t=thread_current ();
+  t->priority = new_priority;
+  // added--------------------------------------------------
+  // block interrupts
+  
+  enum intr_level old_level = intr_disable ();
+  //list_remove(&t->elem);  
+  //list_insert_ordered(&ready_list, &t->elem, thread_less, NULL);
+  list_sort(&ready_list, thread_less, NULL );
+  // enable em
+  intr_set_level(old_level);
+  intr_enable();
+  thread_yield();
+  //*/
 }
 
 /* Returns the current thread's priority. */
