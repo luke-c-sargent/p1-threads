@@ -140,4 +140,10 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+// added code-------------------------------------------------------------------
+//
+bool thread_less (const struct list_elem *a, const struct list_elem *b, void *aux);
+void print_thread_priorities();
+// ------------------------------------------------------------------- end added
+
 #endif /* threads/thread.h */
