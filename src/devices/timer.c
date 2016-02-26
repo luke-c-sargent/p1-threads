@@ -28,7 +28,7 @@ static intr_handler_func timer_interrupt;
 
 // added code---------------------------------------------------------------------------------
 struct sleeper {
-  int64_t sleep_til; /* the tick count when the sleeper shoudl wake */
+  int64_t sleep_til; /* the tick count when the sleeper should wake */
   struct semaphore sema;
 
   //required for list
@@ -43,19 +43,33 @@ static struct list sleep_list;    /* list of sleepers to be checked*/
 bool timer_less (const struct list_elem *a, const struct list_elem *b, void *aux){
   struct sleeper* snp1 = list_entry(a, struct sleeper, elem);
   struct sleeper* snp2 = list_entry(b, struct sleeper, elem);
-  printf("[%d] %ld < %ld = %d\n", (int)thread_tid(), (long)snp1->sleep_til, (long)snp2->sleep_til, (int)(snp1->sleep_til < snp2->sleep_til));
+  //printf("[%d] %ld < %ld = %d\n", (int)thread_tid(), (long)snp1->sleep_til, (long)snp2->sleep_til, (int)(snp1->sleep_til < snp2->sleep_til));
   ASSERT(snp1 != snp2);
   return (snp1->sleep_til < snp2->sleep_til);
 }
 
 void insert_sleeper(struct list_elem* list_element){
   ASSERT(list_element);
-  printf("list is %d long\n", list_size(&sleep_list));
+  //printf("list is %d long\n", list_size(&sleep_list));
   list_insert_ordered (&sleep_list, list_element, timer_less, NULL);
 }
 
 void timer_tick () {
-        // first element should be lowest, since less fn applied
+  struct list_elem *e;
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
+       e = list_next (e))
+  {
+    struct sleeper *sp = list_entry (e, struct sleeper, elem);
+    if( sp->sleep_til <= ticks ){
+          //printf("!!!! %ld <= %ld? \n", (long)(sp->sleep_til), (long)ticks);
+          //remove from list
+          list_pop_front(&sleep_list);
+          //let the thread resume
+          sema_up(&(sp->sema));
+    }
+    // 
+  }
+/*
   if( list_size(&sleep_list) > 0 ) {
         struct list_elem* e= list_front(&sleep_list);
         struct sleeper* sp = list_entry(e, struct sleeper, elem);
@@ -67,7 +81,7 @@ void timer_tick () {
           //let the thread resume
           sema_up(&(sp->sema));
         }
-  }
+  } //*/ // SAFETY
 }
 
 // ----------------------------------------------------------------------------------------
@@ -84,7 +98,7 @@ timer_init (void)
 {
   // added code---------------------------------------------------------------------------------
     // -- init sleeper list
-  printf("timer_init is running\n");
+  //printf("timer_init is running\n");
   list_init(&sleep_list);
     // -- init list control semaphore
   sema_init(&sleep_list_sema, 1);
@@ -100,7 +114,7 @@ timer_calibrate (void)
   unsigned high_bit, test_bit;
 
   ASSERT (intr_get_level () == INTR_ON);
-  printf ("Calibrating timer...  ");
+  //printf ("Calibrating timer...  ");
 
   /* Approximate loops_per_tick as the largest power-of-two
      still less than one timer tick. */
@@ -268,7 +282,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   // ------------ added code --------------------------------------
-  if(ticks%2)
+  //if(ticks%2)
     timer_tick ();
   // --------------------------------------------------------------
 }
