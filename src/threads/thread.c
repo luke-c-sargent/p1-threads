@@ -354,7 +354,7 @@ thread_set_priority (int new_priority)
   // block interrupts
   
   enum intr_level old_level = intr_disable ();
-  //list_remove(&t->elem);  
+  //list_remove(&t->elem);
   //list_insert_ordered(&ready_list, &t->elem, thread_less, NULL);
   list_sort(&ready_list, thread_less, NULL );
   // enable em
@@ -368,7 +368,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current()->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -469,6 +469,9 @@ running_thread (void)
 static bool
 is_thread (struct thread *t)
 {
+  if(t != NULL){
+    //printf("magic number corrupted\n");
+  }
   return t != NULL && t->magic == THREAD_MAGIC;
 }
 
@@ -488,6 +491,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->old_priority = -1;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable();

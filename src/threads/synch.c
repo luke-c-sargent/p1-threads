@@ -201,6 +201,18 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  // added code ----------------------------------------------
+
+  if(lock->holder != NULL && (lock->holder->priority < thread_current () -> priority)){
+      //printf("t[%s] %d < %d ? %d\n",lock->holder->name, lock->holder->priority,thread_current()->priority, (lock->holder->priority < thread_current () -> priority));
+      //ASSERT(0);
+      if(lock->holder->old_priority < 0)
+        lock->holder->old_priority = lock->holder->priority;
+      lock->holder->priority = thread_current () -> priority;
+  }
+
+  // ----------------------------------------------- end added
+
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
 }
@@ -222,6 +234,16 @@ lock_try_acquire (struct lock *lock)
   success = sema_try_down (&lock->semaphore);
   if (success)
     lock->holder = thread_current ();
+  //ADDED CODE------------------------------------------------------
+  else{
+    if(lock->holder->priority < thread_current () -> priority){
+      //printf("t[%s] %d < %d ? %d\n",lock->holder->name, lock->holder->priority,thread_current()->priority, (lock->holder->priority < thread_current () -> priority));
+      lock->holder->old_priority = lock->holder->priority;
+      lock->holder->priority = thread_current () -> priority;
+    }
+  }
+  
+  // END ADDED CODE-------------------------------------------------
   return success;
 }
 
@@ -233,11 +255,18 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
+  struct thread* ctp = thread_current();
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  // ADDED-------------------------------------
+  if( ctp->old_priority > -1){
+    ctp->priority= ctp->old_priority;
+    ctp->old_priority = -1;
+  }// ----------------------------------end added
+  thread_yield();
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -324,7 +353,6 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)) {
-    //struct list_elem* elem_pointer= list_pop_front (&cond->waiters);
     struct list_elem* elem_pointer= list_max (&cond->waiters, thread_less, NULL);
     list_remove(elem_pointer);
     sema_up (&list_entry (elem_pointer, struct semaphore_elem, elem)->semaphore);
