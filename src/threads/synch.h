@@ -4,12 +4,19 @@
 #include <list.h>
 #include <stdbool.h>
 
+/* ----------------------------------------------------
+Modified for CS439 by:
+Luke Sargent
+Brittany Madrigal
+Dates Worked: 2/21, 2/22, 2/26
+----------------------------------------------------- */
+
 /* A counting semaphore. */
 struct semaphore 
   {
     unsigned value;             /* Current value. */
     struct list waiters;        /* List of waiting threads. */
-    int priority;
+    int priority;               /* priority value */
   };
 
 void sema_init (struct semaphore *, unsigned value);

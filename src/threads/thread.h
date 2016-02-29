@@ -5,6 +5,13 @@
 #include <list.h>
 #include <stdint.h>
 
+/* ----------------------------------------------------
+Modified for CS439 by:
+Luke Sargent
+Brittany Madrigal
+Dates Worked: 2/15, 2/17, 2/21
+----------------------------------------------------- */
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -91,7 +98,7 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     // ADDED CODE ----------------------------------------
-    int old_priority;
+    int old_priority;                   /* store original priority in case of donation */
     // ----------------------------------------- end added
 
     struct list_elem allelem;           /* List element for all threads list. */
@@ -145,8 +152,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 // added code-------------------------------------------------------------------
-//
+// thread comparator function declaration
 bool thread_less (const struct list_elem *a, const struct list_elem *b, void *aux);
+// diagnostic print function
 void print_thread_priorities();
 // ------------------------------------------------------------------- end added
 

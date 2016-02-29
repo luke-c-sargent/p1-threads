@@ -8,6 +8,13 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
   
+/* ----------------------------------------------------
+Modified for CS439 by:
+Luke Sargent
+Brittany Madrigal
+Dates Worked: 2/15, 2/17, 2/21, 2/22, 2/25
+----------------------------------------------------- */
+
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -26,10 +33,11 @@ static unsigned loops_per_tick;
 
 static intr_handler_func timer_interrupt;
 
-// added code---------------------------------------------------------------------------------
+// added code-----------------------------------------------------
+// sleeper struct is a list element for sleeping threads the timer keeps track of
 struct sleeper {
   int64_t sleep_til; /* the tick count when the sleeper should wake */
-  struct semaphore sema;
+  struct semaphore sema; /* the semaphore that controls access */
 
   //required for list
   struct list_elem elem;
@@ -39,52 +47,49 @@ static struct semaphore sleep_list_sema; /* control access to sleep list */
 
 static struct list sleep_list;    /* list of sleepers to be checked*/
 
-
-bool timer_less (const struct list_elem *a, const struct list_elem *b, void *aux){
-  struct sleeper* snp1 = list_entry(a, struct sleeper, elem);
-  struct sleeper* snp2 = list_entry(b, struct sleeper, elem);
-  //printf("[%d] %ld < %ld = %d\n", (int)thread_tid(), (long)snp1->sleep_til, (long)snp2->sleep_til, (int)(snp1->sleep_til < snp2->sleep_til));
-  ASSERT(snp1 != snp2);
+/* 
+Timer comparator function: compares timers for ordered list insertion
+function written by brittany
+*/
+bool 
+timer_less (const struct list_elem *a, const struct list_elem *b, void *aux){
+  struct sleeper* snp1 = list_entry (a, struct sleeper, elem);
+  struct sleeper* snp2 = list_entry (b, struct sleeper, elem);
+  ASSERT (snp1 != snp2);
   return (snp1->sleep_til < snp2->sleep_til);
 }
 
-void insert_sleeper(struct list_elem* list_element){
-  ASSERT(list_element);
-  //printf("list is %d long\n", list_size(&sleep_list));
+/*
+sleeper insertion function: inserts sleeper into sleeper list in proper order
+function written by luke
+*/
+void 
+insert_sleeper(struct list_elem* list_element){
+  ASSERT (list_element);
   list_insert_ordered (&sleep_list, list_element, timer_less, NULL);
 }
-
-void timer_tick () {
+/*
+Sleep list management function: checks all sleepers on every timer interrupt 
+to see if they should wake
+function worked on by luke and brittany
+*/
+void 
+timer_tick () {
   struct list_elem *e;
   for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
        e = list_next (e))
   {
     struct sleeper *sp = list_entry (e, struct sleeper, elem);
     if( sp->sleep_til <= ticks ){
-          //printf("!!!! %ld <= %ld? \n", (long)(sp->sleep_til), (long)ticks);
           //remove from list
-          list_pop_front(&sleep_list);
+          list_pop_front (&sleep_list);
           //let the thread resume
-          sema_up(&(sp->sema));
+          sema_up (&(sp->sema));
     }
-    // 
   }
-/*
-  if( list_size(&sleep_list) > 0 ) {
-        struct list_elem* e= list_front(&sleep_list);
-        struct sleeper* sp = list_entry(e, struct sleeper, elem);
-        ASSERT( (sp->sleep_til));
-        if( sp->sleep_til <= ticks ){
-          //printf("!!!! %ld <= %ld? \n", (long)(sp->sleep_til), (long)ticks);
-          //remove from list
-          list_pop_front(&sleep_list);
-          //let the thread resume
-          sema_up(&(sp->sema));
-        }
-  } //*/ // SAFETY
 }
 
-// ----------------------------------------------------------------------------------------
+// ------------------------------------------------------------------end added code
 
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
@@ -93,13 +98,15 @@ static void real_time_delay (int64_t num, int32_t denom);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */ 
+/*
+function modified by luke and brittany
+*/
 void
 timer_init (void) 
 {
   // added code---------------------------------------------------------------------------------
     // -- init sleeper list
-  //printf("timer_init is running\n");
-  list_init(&sleep_list);
+  list_init(&sleep_list); 
     // -- init list control semaphore
   sema_init(&sleep_list_sema, 1);
   // ----------------------------------------------------------------------------------------
@@ -154,54 +161,35 @@ timer_elapsed (int64_t then)
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
+/*
+function modified by brittany and luke
+*/
 void
-//timer_sleep (int64_t ticks) 
 timer_sleep (int64_t _ticks) 
 {
-  // per-thread struct
+  // per-thread sleeper struct
   struct sleeper sleep_node;
   // init sleep node sema
   sema_init(&(sleep_node.sema),0);
 
-  int thread_id = (int)thread_tid();
+  int thread_id = (int)thread_tid ();
   int64_t start = ticks;
   int64_t stop = start + _ticks; 
-  //printf ("putting thread %d to sleep for %ld ticks at %ld to %ld\n", thread_id, (long)_ticks, (long)start, (long)stop);
-  //printf ("sleep_node ptr: %p\n",&sleep_node);
+
   ASSERT (intr_get_level () == INTR_ON);
-
-  // --------------------added code--------------------------------------------------------------
-
-  // no interrupts?
+  // --------------------added code-----------------------------------
   //    initialize a sleeper
   sleep_node.sleep_til = (int64_t)stop;
-  //  sema_init(&(sleep_node.sema),0); <-- moved to timer_init
-  ASSERT(!(sleep_node.sema.value));
-  //printf("created sleeper at %ld ticks til %ld ticks\n", (long)start, (long)sleep_node.sleep_til);
+  ASSERT (!(sleep_node.sema.value));
 
-  //sema_down(&sleep_list_sema);   /* acquire rights to list */
-  enum intr_level old_level = intr_disable();
-  insert_sleeper(&(sleep_node.elem));
-  //printf("inserted element into list [%d]\n", list_size(&sleep_list));
-  //sema_up(&sleep_list_sema);    /* release hold on sleep list */
-  //printf("sema'd up\n");
+  enum intr_level old_level = intr_disable ();
+  insert_sleeper (&(sleep_node.elem));
+
   intr_set_level (old_level);
   // call the node's sema down, making it block until it is woken by the timing coordinator
-  //printf("sleeping via sema_down");
-  sema_down(&(sleep_node.sema));
-  // block thread
-  // resume when condition met
+  sema_down (&(sleep_node.sema));
 
-
-  // --------------------------------------------------------------------------------------------
-  /*
-
-  
-  // busy waiting
-  while (timer_elapsed (start) < _ticks) 
-    thread_yield ();
-//*/
-  //printf("thread %d timer_sleep() end at t=%ld\n", thread_id, (long)ticks);
+  // -----------------------------------------------------------------
   ASSERT (intr_get_level () == INTR_ON);
 }
 
@@ -282,7 +270,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   // ------------ added code --------------------------------------
-  //if(ticks%2)
     timer_tick ();
   // --------------------------------------------------------------
 }

@@ -1,6 +1,13 @@
 #ifndef DEVICES_TIMER_H
 #define DEVICES_TIMER_H
 
+/* ----------------------------------------------------
+Modified for CS439 by:
+Luke Sargent
+Brittany Madrigal
+Dates Worked: 2/15, 2/17
+----------------------------------------------------- */
+
 #include <round.h>
 #include <stdint.h>
 // ---------- added includes -------------
@@ -30,8 +37,11 @@ void timer_ndelay (int64_t nanoseconds);
 void timer_print_stats (void);
 
 // ------- added declarations --------------------
+/* timer comparator function */
 bool timer_less (const struct list_elem *a, const struct list_elem *b, void *aux);
+/* sleep list insertion function */
 void insert_sleeper(struct list_elem* list_element);
+/* timer interrupt sleeper checker */
 void timer_tick();
 
 

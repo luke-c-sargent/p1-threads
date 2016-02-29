@@ -26,6 +26,13 @@
    MODIFICATIONS.
 */
 
+/* ----------------------------------------------------
+Modified for CS439 by:
+Luke Sargent
+Brittany Madrigal
+Dates Worked: 2/21, 2/22, 2/25, 2/26, 2/27 2/28
+----------------------------------------------------- */
+
 #include "threads/synch.h"
 #include <stdio.h>
 #include <string.h>
@@ -57,6 +64,10 @@ sema_init (struct semaphore *sema, unsigned value)
    interrupt handler.  This function may be called with
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. */
+/*
+ function modified by luke
+ changes: insert items to waitlist with priority 'less' function
+*/
 void
 sema_down (struct semaphore *sema) 
 {
@@ -68,9 +79,8 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      //list_push_back (&sema->waiters, &thread_current ()->elem);
       // added code--------------------------------------------------------
-      list_insert_ordered ( &sema->waiters, &thread_current ()->elem, thread_less, NULL);
+      list_insert_ordered (&sema->waiters, &thread_current ()->elem, thread_less, NULL);
       // -------------------------------------------------------- end added
       thread_block ();
     }
@@ -107,6 +117,10 @@ sema_try_down (struct semaphore *sema)
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
+/*
+ function modified by luke and brittany
+ changes: insert items to waitlist with priority 'less' function
+*/
 void
 sema_up (struct semaphore *sema) 
 {
@@ -120,8 +134,8 @@ sema_up (struct semaphore *sema)
                                 struct thread, elem));
   sema->value++;
   intr_set_level (old_level);
-  if(!intr_context ()){
-    thread_yield();
+  if (!intr_context ()) {
+    thread_yield ();
   }
 }
 
@@ -194,6 +208,10 @@ lock_init (struct lock *lock)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+/*
+ function modified by brittany and luke
+ changes: priority donation, storage of old priority variable
+*/
 void
 lock_acquire (struct lock *lock)
 {
@@ -203,10 +221,9 @@ lock_acquire (struct lock *lock)
 
   // added code ----------------------------------------------
 
-  if(lock->holder != NULL && (lock->holder->priority < thread_current () -> priority)){
-      //printf("t[%s] %d < %d ? %d\n",lock->holder->name, lock->holder->priority,thread_current()->priority, (lock->holder->priority < thread_current () -> priority));
-      //ASSERT(0);
-      if(lock->holder->old_priority < 0)
+  if (lock->holder != NULL && 
+          (lock->holder->priority < thread_current () -> priority)) {
+      if (lock->holder->old_priority < 0)
         lock->holder->old_priority = lock->holder->priority;
       lock->holder->priority = thread_current () -> priority;
   }
@@ -223,6 +240,10 @@ lock_acquire (struct lock *lock)
 
    This function will not sleep, so it may be called within an
    interrupt handler. */
+/*
+ function modified by brittany
+ changes: added priority donation management
+*/
 bool
 lock_try_acquire (struct lock *lock)
 {
@@ -236,13 +257,11 @@ lock_try_acquire (struct lock *lock)
     lock->holder = thread_current ();
   //ADDED CODE------------------------------------------------------
   else{
-    if(lock->holder->priority < thread_current () -> priority){
-      //printf("t[%s] %d < %d ? %d\n",lock->holder->name, lock->holder->priority,thread_current()->priority, (lock->holder->priority < thread_current () -> priority));
+    if (lock->holder->priority < thread_current () -> priority) {
       lock->holder->old_priority = lock->holder->priority;
-      lock->holder->priority = thread_current () -> priority;
+      lock->holder->priority = thread_current ()->priority;
     }
   }
-  
   // END ADDED CODE-------------------------------------------------
   return success;
 }
@@ -252,21 +271,26 @@ lock_try_acquire (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
+/*
+ function modified by brittany and luke
+ changes: priority donation, storage of old priority variable, restoration of
+    previous priority.
+*/
 void
 lock_release (struct lock *lock) 
 {
-  struct thread* ctp = thread_current();
+  struct thread* ctp = thread_current ();
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
   // ADDED-------------------------------------
-  if( ctp->old_priority > -1){
-    ctp->priority= ctp->old_priority;
+  if (ctp->old_priority > -1){
+    ctp->priority = ctp->old_priority;
     ctp->old_priority = -1;
   }// ----------------------------------end added
-  thread_yield();
+  thread_yield ();
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -276,7 +300,6 @@ bool
 lock_held_by_current_thread (const struct lock *lock) 
 {
   ASSERT (lock != NULL);
-
   return lock->holder == thread_current ();
 }
 
@@ -318,6 +341,11 @@ cond_init (struct condition *cond)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+/*
+ function modified by brittany and luke
+ changes: condition variable less function implemented to
+    sort waiters.
+*/
 void
 cond_wait (struct condition *cond, struct lock *lock) 
 {
@@ -329,8 +357,7 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  waiter.semaphore.priority = thread_current()->priority;
-  //list_push_back (&cond->waiters, &waiter.elem);
+  waiter.semaphore.priority = thread_current ()->priority;
   list_insert_ordered (&cond->waiters, &waiter.elem, condvar_less, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
@@ -344,6 +371,10 @@ cond_wait (struct condition *cond, struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
    interrupt handler. */
+/*
+ function modified by brittany and luke
+ changes: manage condition variable waiters by priority
+*/
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED) 
 {
@@ -354,7 +385,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
 
   if (!list_empty (&cond->waiters)) {
     struct list_elem* elem_pointer= list_max (&cond->waiters, thread_less, NULL);
-    list_remove(elem_pointer);
+    list_remove (elem_pointer);
     sema_up (&list_entry (elem_pointer, struct semaphore_elem, elem)->semaphore);
   }
 }
@@ -375,10 +406,15 @@ cond_broadcast (struct condition *cond, struct lock *lock)
     cond_signal (cond, lock);
 
 }
-
-bool condvar_less (const struct list_elem *a, const struct list_elem *b, void *aux){
-  struct semaphore_elem* s1 = list_entry(a, struct semaphore_elem, elem);
-  struct semaphore_elem* s2 = list_entry(b, struct semaphore_elem, elem);
-  //printf("t1p: %d > t2p: %d? %d\n",(t1->priority), (t2->priority), (t1->priority) > (t2->priority));
-  return ( (s1->semaphore.priority) > (s2->semaphore.priority) );
+/*
+ Condition Variable comparator function for list insertion.
+  necessary component of priority management / donation
+  function worked on by blue
+ changes: priority donation, storage of old priority variable
+*/
+bool
+condvar_less (const struct list_elem *a, const struct list_elem *b, void *aux){
+  struct semaphore_elem* s1 = list_entry (a, struct semaphore_elem, elem);
+  struct semaphore_elem* s2 = list_entry (b, struct semaphore_elem, elem);
+  return ((s1->semaphore.priority) > (s2->semaphore.priority));
 }

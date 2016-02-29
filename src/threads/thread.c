@@ -230,26 +230,25 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
+/*
+function modified by brittany and luke
+changes: changed from simple round robin to priority queue
+    via list_insert_ordered and thread comparator function
+    thread_less()
+*/
 void
 thread_unblock (struct thread *t) 
 {
   enum intr_level old_level;
-  bool yield=0;
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  //list_push_back (&ready_list, &t->elem);
   // added code-------------------------------------------------
   list_insert_ordered(&ready_list, &t->elem, thread_less, NULL);
-  if(t->priority > thread_current()->priority && (t != thread_current()))
-    yield=1;
   // ------------------------------------------------- end added
   t->status = THREAD_READY;
   intr_set_level (old_level);
-  // added
-  //if(yield)
-    //thread_yield();
 }
 
 /* Returns the name of the running thread. */
@@ -308,6 +307,12 @@ thread_exit (void)
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
+/*
+function modified by brittany
+changes: changed from simple round robin to priority queue
+    via list_insert_ordered and thread comparator function
+    thread_less()
+*/
 void
 thread_yield (void) 
 {
@@ -318,9 +323,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   // added code ------------------------------------------------------
-  if (cur != idle_thread) // this was there before
+  if (cur != idle_thread) // this line from given code
     list_insert_ordered (&ready_list, &cur->elem, thread_less, NULL);
-    //list_push_back (&ready_list, &cur->elem);
   // -------------------------------------------------- end added code
   cur->status = THREAD_READY;
   schedule ();
@@ -345,23 +349,22 @@ thread_foreach (thread_action_func *func, void *aux)
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
+/*
+function changed by luke and brittany
+changes: disable interrupts, set new priority, sort ready list
+*/
 void 
 thread_set_priority (int new_priority) 
 {
-  struct thread* t=thread_current ();
+  struct thread* t = thread_current ();
   t->priority = new_priority;
   // added--------------------------------------------------
   // block interrupts
-  
   enum intr_level old_level = intr_disable ();
-  //list_remove(&t->elem);
-  //list_insert_ordered(&ready_list, &t->elem, thread_less, NULL);
-  list_sort(&ready_list, thread_less, NULL );
-  // enable em
-  intr_set_level(old_level);
-  intr_enable();
-  thread_yield();
-  //*/
+  list_sort (&ready_list, thread_less, NULL );
+  intr_set_level (old_level);
+  intr_enable ();
+  thread_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -593,11 +596,6 @@ schedule (void)
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
-  // added code------------------------------------------------------
-  //if(strcmp(next->name, "idle"))
-    //print_thread_priorities();
-    //printf("\ntid[%d]:%s p[%d] scheduled next\n", next->tid, next->name, next->priority);
-  // -------------------------------------------------------- end added
 }
 
 /* Returns a tid to use for a new thread. */
@@ -619,17 +617,24 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 // added code -----------------------------------------------
-// less is more -- higher priority, higher up 
-bool thread_less (const struct list_elem *a, const struct list_elem *b, void *aux){
+/* 
+Thread Comparator function. Sorts lists of threads such that higher priority
+threads are at the front
+function created by luke
+*/ 
+bool 
+thread_less (const struct list_elem *a, const struct list_elem *b, void *aux){
   struct thread* t1 = list_entry(a, struct thread, elem);
   struct thread* t2 = list_entry(b, struct thread, elem);
-  //printf("t1p: %d > t2p: %d? %d\n",(t1->priority), (t2->priority), (t1->priority) > (t2->priority));
   return ( (t1->priority) > (t2->priority) );
 }
-
+/*
+Diagnostic thread printing function to check integrity of priority list
+function by luke
+*/
 void print_thread_priorities () {
   struct list_elem *e;
-  if(!list_size(&all_list))
+  if (!list_size(&all_list))
     return;
   printf("THREADLIST:\n");
   for (e = list_begin (&all_list); e != list_end (&all_list);
